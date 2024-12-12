@@ -105,8 +105,8 @@ class OllamaChatModel(BaseChatModel):
             response = self.response(user_prompt, system_message)
 
             for part in response:
-                print(f"Inner: {part.message}")
-                print(f"Inner: Is stream done? {part.done_reason}", end="\n\n")
+                print(f"Assistant: {part.message}")
+                print(f"Assistant: Is stream done? {part.done_reason}", end="\n\n")
                 # If there are tool calls, process them and get final response
                 if hasattr(part.message, "tool_calls") and part.message.tool_calls:
                     collected_data = {}
