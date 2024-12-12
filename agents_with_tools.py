@@ -86,6 +86,7 @@ class OllamaChatModel(BaseChatModel):
             format=self.format,
             keep_alive=self.keep_alive,
             tools=self.tools,
+            stream=True
         )
 
     def chat(self, system_message: str = None, save_chat: bool = True) -> None:
@@ -103,40 +104,47 @@ class OllamaChatModel(BaseChatModel):
 
             response = self.response(user_prompt, system_message)
 
-            # If there are tool calls, process them and get final response
-            if hasattr(response.message, "tool_calls") and response.message.tool_calls:
-                collected_data = {}
+            for part in response:
+                print(f"Inner: {part.message}")
+                print(f"Inner: Is stream done? {part.done_reason}", end="\n\n")
+                # If there are tool calls, process them and get final response
+                if hasattr(part.message, "tool_calls") and part.message.tool_calls:
+                    collected_data = {}
 
-                for tool_call in response.message.tool_calls:
-                    result = self.extract(tool_call)
-                    collected_data[tool_call.function.name] = result
+                    for tool_call in part.message.tool_calls:
+                        result = self.extract(tool_call)
+                        collected_data[tool_call.function.name] = result
 
-                final_prompt = (
-                    f"Based on the following information:\n"
-                    f"{collected_data}"
-                    f"Please provide a natural response to the original question: '{user_prompt}'"
-                )
+                    final_prompt = (
+                        f"Based on the following information:\n"
+                        f"{collected_data}"
+                        f"Please provide a natural response to the original question: '{user_prompt}'"
+                    )
 
-                final_response = self.client.chat(
-                    model=self.model,
-                    messages=[
-                        {
-                            "role": "system",
-                            "content": "Sumup your response before sending back. Make is short and concise"
-                            + " "
-                            + system_message,
-                        },
-                        {"role": "user", "content": final_prompt},
-                    ],
-                )
-                response_content = final_response.message.content
-            else:
-                # If no tool calls, use the original response
-                response_content = response.message.content
+                    final_response = self.client.chat(
+                        model=self.model,
+                        messages=[
+                            {
+                                "role": "system",
+                                "content": "Sumup your response before sending back. Make is short and concise"
+                                + " "
+                                + system_message,
+                            },
+                            {"role": "user", "content": final_prompt},
+                        ],
+                    )
+                    response_content = final_response.message.content
+                else:
+                    # If no tool calls, use the original response
+                    response_content = part.message.content
 
-            if response_content:
-                print(f"AI: {response_content}", end="\n\n")
-                self.memory.add(self.message(human=user_prompt, ai=response_content))
+                if response_content:
+                    print(f"AI: {response_content}", end="\n\n")
+                    self.memory.add(self.message(human=user_prompt, ai=response_content))
+
+                if hasattr(part, "done_reason"):
+                    if part.done_reason == "stop":
+                        break
 
 
 def main():
